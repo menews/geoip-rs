@@ -15,7 +15,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-use std::env;
+use std::{env, fs};
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ use maxminddb::geoip2::City;
 use maxminddb::MaxMindDBError;
 use maxminddb::Reader;
 use memmap::Mmap;
-use serde_json;
+use serde_json::Value;
 
 #[derive(Serialize)]
 struct NonResolvedIPResponse<'a> {
@@ -48,6 +48,7 @@ struct ResolvedIPResponse<'a> {
     pub continent_name: &'a str,
     pub country_code: &'a str,
     pub country_name: &'a str,
+    pub country_name_ar: &'a str,
     pub region_code: &'a str,
     pub region_name: &'a str,
     pub province_code: &'a str,
@@ -86,6 +87,20 @@ fn ip_address_to_resolve(
 
 fn get_language(lang: Option<String>) -> String {
     lang.unwrap_or_else(|| String::from("en"))
+}
+
+fn get_arabic_country_name(code: &str) -> String {
+    return if let Ok(path) = env::var("GEOIP_RS_COUNTRY_NAMES_AR") {
+        let _file = fs::read_to_string(path).unwrap();
+        get_value(_file,code)
+    } else {
+        "".to_string()
+    };
+
+}
+
+fn get_value(file:String,code:&str)-> String{
+    file.parse::<Value>().unwrap()[code].as_str().unwrap_or("").to_string()
 }
 
 struct Db {
@@ -156,6 +171,10 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                     .and_then(|names| names.get(&language))
                     .map(String::as_str)
                     .unwrap_or(""),
+                country_name_ar: &*get_arabic_country_name(geoip.country.as_ref()
+                    .and_then(|country| country.iso_code.as_ref())
+                    .map(String::as_str)
+                    .unwrap_or("")),
                 region_code: region
                     .and_then(|subdiv| subdiv.iso_code.as_ref())
                     .map(String::as_ref)
@@ -194,7 +213,7 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
             ip_address: &ip_address,
         }),
     }
-    .unwrap();
+        .unwrap();
 
     match query.callback {
         Some(callback) => HttpResponse::Ok()
@@ -218,6 +237,7 @@ fn db_file_path() -> String {
 
     panic!("You must specify the db path, either as a command line argument or as GEOIP_RS_DB_PATH env var");
 }
+
 #[actix_rt::main]
 async fn main() {
     dotenv::from_path(".env").ok();
@@ -235,9 +255,9 @@ async fn main() {
             .wrap(Cors::new().send_wildcard().finish())
             .route("/", web::route().to(index))
     })
-    .bind(format!("{}:{}", host, port))
-    .unwrap_or_else(|_| panic!("Can not bind to {}:{}", host, port))
-    .run()
-    .await
-    .unwrap();
+        .bind(format!("{}:{}", host, port))
+        .unwrap_or_else(|_| panic!("Can not bind to {}:{}", host, port))
+        .run()
+        .await
+        .unwrap();
 }

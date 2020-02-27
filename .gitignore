@@ -1,7 +1,6 @@
 /target
 **/*.rs.bk
 .idea
-data/*.txt
-data/*.csv
-data/*.mmdb
+data
+!data/*.md
 .env
