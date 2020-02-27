@@ -95,6 +95,21 @@ geoip-rs
 ```
 or you can copy `.env.template` to `.env` and customize its contents
 
+### Arabic country names
+
+to return arabic name country `country_name_ar` in the response you need to create a josn file contains the localized country names as the following example:
+
+    {
+      "AE": "الامارات العربية المتحدة",
+      .
+      .
+      .
+    }
+    
+then set the path to the file in `.env` file
+    
+    GEOIP_RS_COUNTRY_NAMES_AR=data/countries_ar.json
+
 ### License
 
 This project is licensed under the Apache License, Version 2.0
