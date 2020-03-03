@@ -48,7 +48,6 @@ struct ResolvedIPResponse<'a> {
     pub continent_name: &'a str,
     pub country_code: &'a str,
     pub country_name: &'a str,
-    pub country_name_ar: &'a str,
     pub region_code: &'a str,
     pub region_name: &'a str,
     pub province_code: &'a str,
@@ -72,35 +71,40 @@ fn ip_address_to_resolve(
     ip.filter(|ip_address| {
         ip_address.parse::<Ipv4Addr>().is_ok() || ip_address.parse::<Ipv6Addr>().is_ok()
     })
-    .or_else(|| {
-        headers
-            .get("X-Real-IP")
-            .map(|s| s.to_str().unwrap().to_string())
-    })
-    .or_else(|| {
-        remote_addr
-            .map(|ip_port| ip_port.split(':').take(1).last().unwrap())
-            .map(|ip| ip.to_string())
-    })
-    .expect("unable to find ip address to resolve")
+        .or_else(|| {
+            headers
+                .get("X-Real-IP")
+                .map(|s| s.to_str().unwrap().to_string())
+        })
+        .or_else(|| {
+            remote_addr
+                .map(|ip_port| ip_port.split(':').take(1).last().unwrap())
+                .map(|ip| ip.to_string())
+        })
+        .expect("unable to find ip address to resolve")
 }
 
 fn get_language(lang: Option<String>) -> String {
     lang.unwrap_or_else(|| String::from("en"))
 }
 
-fn get_arabic_country_name(code: &str) -> String {
-    return if let Ok(path) = env::var("GEOIP_RS_COUNTRY_NAMES_AR") {
+fn get_localized_country_name(lang: &str, code: &str) -> String {
+    return if let Ok(path) = env::var("GEOIP_RS_COUNTRY_NAMES") {
         let _file = fs::read_to_string(path).unwrap();
-        get_value(_file,code)
+        get_value(_file, lang, code)
     } else {
-        "".to_string()
+        String::from("")
     };
 
 }
 
-fn get_value(file:String,code:&str)-> String{
-    file.parse::<Value>().unwrap()[code].as_str().unwrap_or("").to_string()
+fn get_value(file: String, lang: &str, code: &str) -> String {
+    let content = file.parse::<Value>().unwrap();
+    if content[lang][code].is_null(){
+        String::from("")
+    }else{
+        content[lang][code].as_str().unwrap().to_string()
+    }
 }
 
 struct Db {
@@ -126,6 +130,11 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                 .as_ref()
                 .filter(|subdivs| subdivs.len() > 1)
                 .and_then(|subdivs| subdivs.get(1));
+
+            let localize_country_name = get_localized_country_name(&language, geoip.country.as_ref()
+                .and_then(|country| country.iso_code.as_ref())
+                .map(String::as_str)
+                .unwrap_or(""));
 
             let res = ResolvedIPResponse {
                 ip_address: &ip_address,
@@ -170,11 +179,7 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                     .and_then(|country| country.names.as_ref())
                     .and_then(|names| names.get(&language))
                     .map(String::as_str)
-                    .unwrap_or(""),
-                country_name_ar: &*get_arabic_country_name(geoip.country.as_ref()
-                    .and_then(|country| country.iso_code.as_ref())
-                    .map(String::as_str)
-                    .unwrap_or("")),
+                    .unwrap_or(&localize_country_name),
                 region_code: region
                     .and_then(|subdiv| subdiv.iso_code.as_ref())
                     .map(String::as_ref)
