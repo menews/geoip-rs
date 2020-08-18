@@ -40,20 +40,21 @@ struct NonResolvedIPResponse<'a> {
 
 #[derive(Serialize)]
 struct ResolvedIPResponse<'a> {
-    pub ip_address: &'a str,
+    pub ipAddress: &'a str,
     pub latitude: &'a f64,
     pub longitude: &'a f64,
-    pub postal_code: &'a str,
-    pub continent_code: &'a str,
-    pub continent_name: &'a str,
-    pub country_code: &'a str,
-    pub country_name: &'a str,
-    pub region_code: &'a str,
-    pub region_name: &'a str,
-    pub province_code: &'a str,
-    pub province_name: &'a str,
-    pub city_name: &'a str,
-    pub timezone: &'a str,
+    pub postalCode: &'a str,
+    pub continentCode: &'a str,
+    pub continentName: &'a str,
+    pub countryCode: &'a str,
+    pub countryName: &'a str,
+    pub countryNameEn: &'a str,
+    pub regionCode: &'a str,
+    pub regionName: &'a str,
+    pub provinceCode: &'a str,
+    pub provinceName: &'a str,
+    pub cityName: &'a str,
+    pub timeZone: &'a str,
 }
 
 #[derive(Deserialize, Debug)]
@@ -95,14 +96,13 @@ fn get_localized_country_name(lang: &str, code: &str) -> String {
     } else {
         String::from("")
     };
-
 }
 
 fn get_value(file: String, lang: &str, code: &str) -> String {
     let content = file.parse::<Value>().unwrap();
-    if content[lang][code].is_null(){
+    if content[lang][code].is_null() {
         String::from("")
-    }else{
+    } else {
         content[lang][code].as_str().unwrap().to_string()
     }
 }
@@ -137,7 +137,7 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                 .unwrap_or(""));
 
             let res = ResolvedIPResponse {
-                ip_address: &ip_address,
+                ipAddress: &ip_address,
                 latitude: geoip
                     .location
                     .as_ref()
@@ -148,64 +148,71 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                     .as_ref()
                     .and_then(|loc| loc.longitude.as_ref())
                     .unwrap_or(&0.0),
-                postal_code: geoip
+                postalCode: geoip
                     .postal
                     .as_ref()
                     .and_then(|postal| postal.code.as_ref())
                     .map(String::as_str)
                     .unwrap_or(""),
-                continent_code: geoip
+                continentCode: geoip
                     .continent
                     .as_ref()
                     .and_then(|cont| cont.code.as_ref())
                     .map(String::as_str)
                     .unwrap_or(""),
-                continent_name: geoip
+                continentName: geoip
                     .continent
                     .as_ref()
                     .and_then(|cont| cont.names.as_ref())
                     .and_then(|names| names.get(&language))
                     .map(String::as_str)
                     .unwrap_or(""),
-                country_code: geoip
+                countryCode: geoip
                     .country
                     .as_ref()
                     .and_then(|country| country.iso_code.as_ref())
                     .map(String::as_str)
                     .unwrap_or(""),
-                country_name: geoip
+                countryName: geoip
                     .country
                     .as_ref()
                     .and_then(|country| country.names.as_ref())
                     .and_then(|names| names.get(&language))
                     .map(String::as_str)
                     .unwrap_or(&localize_country_name),
-                region_code: region
+                countryNameEn: geoip
+                    .country
+                    .as_ref()
+                    .and_then(|country| country.names.as_ref())
+                    .and_then(|names| names.get("en"))
+                    .map(String::as_str)
+                    .unwrap_or(&localize_country_name),
+                regionCode: region
                     .and_then(|subdiv| subdiv.iso_code.as_ref())
                     .map(String::as_ref)
                     .unwrap_or(""),
-                region_name: region
+                regionName: region
                     .and_then(|subdiv| subdiv.names.as_ref())
                     .and_then(|names| names.get(&language))
                     .map(String::as_ref)
                     .unwrap_or(""),
-                province_code: province
+                provinceCode: province
                     .and_then(|subdiv| subdiv.iso_code.as_ref())
                     .map(String::as_ref)
                     .unwrap_or(""),
-                province_name: province
+                provinceName: province
                     .and_then(|subdiv| subdiv.names.as_ref())
                     .and_then(|names| names.get(&language))
                     .map(String::as_ref)
                     .unwrap_or(""),
-                city_name: geoip
+                cityName: geoip
                     .city
                     .as_ref()
                     .and_then(|city| city.names.as_ref())
                     .and_then(|names| names.get(&language))
                     .map(String::as_str)
                     .unwrap_or(""),
-                timezone: geoip
+                timeZone: geoip
                     .location
                     .as_ref()
                     .and_then(|loc| loc.time_zone.as_ref())
