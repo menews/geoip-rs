@@ -47,8 +47,8 @@ struct ResolvedIPResponse<'a> {
     pub continentCode: &'a str,
     pub continentName: &'a str,
     pub countryCode: &'a str,
+    pub countryLabel: &'a str,
     pub countryName: &'a str,
-    pub countryNameEn: &'a str,
     pub regionCode: &'a str,
     pub regionName: &'a str,
     pub provinceCode: &'a str,
@@ -164,7 +164,7 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                     .continent
                     .as_ref()
                     .and_then(|cont| cont.names.as_ref())
-                    .and_then(|names| names.get(&language))
+                    .and_then(|names| names.get("en"))
                     .map(String::as_str)
                     .unwrap_or(""),
                 countryCode: geoip
@@ -173,14 +173,14 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                     .and_then(|country| country.iso_code.as_ref())
                     .map(String::as_str)
                     .unwrap_or(""),
-                countryName: geoip
+                countryLabel: geoip
                     .country
                     .as_ref()
                     .and_then(|country| country.names.as_ref())
                     .and_then(|names| names.get(&language))
                     .map(String::as_str)
                     .unwrap_or(&localize_country_name),
-                countryNameEn: geoip
+                countryName: geoip
                     .country
                     .as_ref()
                     .and_then(|country| country.names.as_ref())
@@ -193,7 +193,7 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                     .unwrap_or(""),
                 regionName: region
                     .and_then(|subdiv| subdiv.names.as_ref())
-                    .and_then(|names| names.get(&language))
+                    .and_then(|names| names.get("en"))
                     .map(String::as_ref)
                     .unwrap_or(""),
                 provinceCode: province
@@ -202,14 +202,14 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                     .unwrap_or(""),
                 provinceName: province
                     .and_then(|subdiv| subdiv.names.as_ref())
-                    .and_then(|names| names.get(&language))
+                    .and_then(|names| names.get("en"))
                     .map(String::as_ref)
                     .unwrap_or(""),
                 cityName: geoip
                     .city
                     .as_ref()
                     .and_then(|city| city.names.as_ref())
-                    .and_then(|names| names.get(&language))
+                    .and_then(|names| names.get("en"))
                     .map(String::as_str)
                     .unwrap_or(""),
                 timeZone: geoip
