@@ -15,7 +15,7 @@
 #[macro_use]
 extern crate serde_derive;
 
-use std::env;
+use std::{env, fs};
 use std::net::Ipv4Addr;
 use std::net::Ipv6Addr;
 use std::sync::Arc;
@@ -31,7 +31,7 @@ use maxminddb::geoip2::City;
 use maxminddb::MaxMindDBError;
 use maxminddb::Reader;
 use memmap::Mmap;
-use serde_json;
+use serde_json::Value;
 
 #[derive(Serialize)]
 struct NonResolvedIPResponse<'a> {
@@ -40,20 +40,21 @@ struct NonResolvedIPResponse<'a> {
 
 #[derive(Serialize)]
 struct ResolvedIPResponse<'a> {
-    pub ip_address: &'a str,
+    pub ipAddress: &'a str,
     pub latitude: &'a f64,
     pub longitude: &'a f64,
-    pub postal_code: &'a str,
-    pub continent_code: &'a str,
-    pub continent_name: &'a str,
-    pub country_code: &'a str,
-    pub country_name: &'a str,
-    pub region_code: &'a str,
-    pub region_name: &'a str,
-    pub province_code: &'a str,
-    pub province_name: &'a str,
-    pub city_name: &'a str,
-    pub timezone: &'a str,
+    pub postalCode: &'a str,
+    pub continentCode: &'a str,
+    pub continentName: &'a str,
+    pub countryCode: &'a str,
+    pub countryLabel: &'a str,
+    pub countryName: &'a str,
+    pub regionCode: &'a str,
+    pub regionName: &'a str,
+    pub provinceCode: &'a str,
+    pub provinceName: &'a str,
+    pub cityName: &'a str,
+    pub timeZone: &'a str,
 }
 
 #[derive(Deserialize, Debug)]
@@ -71,21 +72,39 @@ fn ip_address_to_resolve(
     ip.filter(|ip_address| {
         ip_address.parse::<Ipv4Addr>().is_ok() || ip_address.parse::<Ipv6Addr>().is_ok()
     })
-    .or_else(|| {
-        headers
-            .get("X-Real-IP")
-            .map(|s| s.to_str().unwrap().to_string())
-    })
-    .or_else(|| {
-        remote_addr
-            .map(|ip_port| ip_port.split(':').take(1).last().unwrap())
-            .map(|ip| ip.to_string())
-    })
-    .expect("unable to find ip address to resolve")
+        .or_else(|| {
+            headers
+                .get("X-Real-IP")
+                .map(|s| s.to_str().unwrap().to_string())
+        })
+        .or_else(|| {
+            remote_addr
+                .map(|ip_port| ip_port.split(':').take(1).last().unwrap())
+                .map(|ip| ip.to_string())
+        })
+        .expect("unable to find ip address to resolve")
 }
 
 fn get_language(lang: Option<String>) -> String {
     lang.unwrap_or_else(|| String::from("en"))
+}
+
+fn get_localized_country_name(lang: &str, code: &str) -> String {
+    return if let Ok(path) = env::var("GEOIP_RS_COUNTRY_NAMES") {
+        let _file = fs::read_to_string(path).unwrap();
+        get_value(_file, lang, code)
+    } else {
+        String::from("")
+    };
+}
+
+fn get_value(file: String, lang: &str, code: &str) -> String {
+    let content = file.parse::<Value>().unwrap();
+    if content[lang][code].is_null() {
+        String::from("")
+    } else {
+        content[lang][code].as_str().unwrap().to_string()
+    }
 }
 
 struct Db {
@@ -112,8 +131,13 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                 .filter(|subdivs| subdivs.len() > 1)
                 .and_then(|subdivs| subdivs.get(1));
 
+            let localize_country_name = get_localized_country_name(&language, geoip.country.as_ref()
+                .and_then(|country| country.iso_code.as_ref())
+                .map(String::as_str)
+                .unwrap_or(""));
+
             let res = ResolvedIPResponse {
-                ip_address: &ip_address,
+                ipAddress: &ip_address,
                 latitude: geoip
                     .location
                     .as_ref()
@@ -124,64 +148,71 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
                     .as_ref()
                     .and_then(|loc| loc.longitude.as_ref())
                     .unwrap_or(&0.0),
-                postal_code: geoip
+                postalCode: geoip
                     .postal
                     .as_ref()
                     .and_then(|postal| postal.code.as_ref())
                     .map(String::as_str)
                     .unwrap_or(""),
-                continent_code: geoip
+                continentCode: geoip
                     .continent
                     .as_ref()
                     .and_then(|cont| cont.code.as_ref())
                     .map(String::as_str)
                     .unwrap_or(""),
-                continent_name: geoip
+                continentName: geoip
                     .continent
                     .as_ref()
                     .and_then(|cont| cont.names.as_ref())
-                    .and_then(|names| names.get(&language))
+                    .and_then(|names| names.get("en"))
                     .map(String::as_str)
                     .unwrap_or(""),
-                country_code: geoip
+                countryCode: geoip
                     .country
                     .as_ref()
                     .and_then(|country| country.iso_code.as_ref())
                     .map(String::as_str)
                     .unwrap_or(""),
-                country_name: geoip
+                countryLabel: geoip
                     .country
                     .as_ref()
                     .and_then(|country| country.names.as_ref())
                     .and_then(|names| names.get(&language))
                     .map(String::as_str)
-                    .unwrap_or(""),
-                region_code: region
+                    .unwrap_or(&localize_country_name),
+                countryName: geoip
+                    .country
+                    .as_ref()
+                    .and_then(|country| country.names.as_ref())
+                    .and_then(|names| names.get("en"))
+                    .map(String::as_str)
+                    .unwrap_or(&localize_country_name),
+                regionCode: region
                     .and_then(|subdiv| subdiv.iso_code.as_ref())
                     .map(String::as_ref)
                     .unwrap_or(""),
-                region_name: region
+                regionName: region
                     .and_then(|subdiv| subdiv.names.as_ref())
-                    .and_then(|names| names.get(&language))
+                    .and_then(|names| names.get("en"))
                     .map(String::as_ref)
                     .unwrap_or(""),
-                province_code: province
+                provinceCode: province
                     .and_then(|subdiv| subdiv.iso_code.as_ref())
                     .map(String::as_ref)
                     .unwrap_or(""),
-                province_name: province
+                provinceName: province
                     .and_then(|subdiv| subdiv.names.as_ref())
-                    .and_then(|names| names.get(&language))
+                    .and_then(|names| names.get("en"))
                     .map(String::as_ref)
                     .unwrap_or(""),
-                city_name: geoip
+                cityName: geoip
                     .city
                     .as_ref()
                     .and_then(|city| city.names.as_ref())
-                    .and_then(|names| names.get(&language))
+                    .and_then(|names| names.get("en"))
                     .map(String::as_str)
                     .unwrap_or(""),
-                timezone: geoip
+                timeZone: geoip
                     .location
                     .as_ref()
                     .and_then(|loc| loc.time_zone.as_ref())
@@ -194,7 +225,7 @@ async fn index(req: HttpRequest, data: web::Data<Db>, web::Query(query): web::Qu
             ip_address: &ip_address,
         }),
     }
-    .unwrap();
+        .unwrap();
 
     match query.callback {
         Some(callback) => HttpResponse::Ok()
@@ -218,6 +249,7 @@ fn db_file_path() -> String {
 
     panic!("You must specify the db path, either as a command line argument or as GEOIP_RS_DB_PATH env var");
 }
+
 #[actix_rt::main]
 async fn main() {
     dotenv::from_path(".env").ok();
@@ -235,9 +267,9 @@ async fn main() {
             .wrap(Cors::new().send_wildcard().finish())
             .route("/", web::route().to(index))
     })
-    .bind(format!("{}:{}", host, port))
-    .unwrap_or_else(|_| panic!("Can not bind to {}:{}", host, port))
-    .run()
-    .await
-    .unwrap();
+        .bind(format!("{}:{}", host, port))
+        .unwrap_or_else(|_| panic!("Can not bind to {}:{}", host, port))
+        .run()
+        .await
+        .unwrap();
 }

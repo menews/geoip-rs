@@ -95,6 +95,25 @@ geoip-rs
 ```
 or you can copy `.env.template` to `.env` and customize its contents
 
+### Arabic country names
+
+to return unsupported localiazed country name in `country_name` in the response you need to create a JSON file contains the localized country names as the following example:
+
+    {
+      "ar":{
+        "AE": "الامارات العربية المتحدة",
+              .
+              .
+              .
+      }
+    }
+    
+then set the path to the file in `.env` file
+    
+    GEOIP_RS_COUNTRY_NAMES_AR=data/countries.json
+
+Now when you pass `?lang=ar` it will return the arabic value
+
 ### License
 
 This project is licensed under the Apache License, Version 2.0
